@@ -16,13 +16,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4  # 升级到最新版，提升兼容性
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3  # 升级版本，支持更多BuildKit特性
+        with:
+          buildkitd-flags: --debug  # 可选：调试BuildKit，生产可移除
 
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3  # 升级版本
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
@@ -33,10 +35,15 @@ jobs:
         with:
           file: ./docker/Dockerfile
           target: ${{ matrix.service }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64  # 保留双架构，不精简
           push: true
+          # 缓存优化：zstd高压缩比，减少缓存体积
           cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},compression=zstd
+          # 开启镜像层压缩+BuildKit优化，核心降体积项
+          squash: true
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1  # 开启BuildKit缓存内联，提升构建效率
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/bililive-tools-${{ matrix.service }}:latest
             ${{ secrets.DOCKER_USERNAME }}/bililive-tools-${{ matrix.service }}:${{ github.ref_name }}
@@ -47,11 +54,13 @@ jobs:
         with:
           file: ./docker/Dockerfile
           target: fullstack
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64  # 保留双架构
           push: true
           cache-from: type=gha,scope=fullstack
-          cache-to: type=gha,mode=max,scope=fullstack
+          cache-to: type=gha,mode=max,scope=fullstack,compression=zstd
+          squash: true  # 合并镜像层，减少体积（双架构下仍生效）
           build-args: |
+            BUILDKIT_INLINE_CACHE=1  # BuildKit核心优化
             VITE_DEFAULT_SERVER=/api
             VITE_FULLSTACK=true
           tags: |
@@ -67,13 +76,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
@@ -84,10 +93,13 @@ jobs:
         with:
           file: ./docker/Dockerfile
           target: ${{ matrix.service }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64  # 保留双架构
           push: true
           cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }},compression=zstd
+          squash: true
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
           tags: ${{ secrets.DOCKER_USERNAME }}/bililive-tools-${{ matrix.service }}:test
 
       - name: Build and push fullstack image
@@ -96,11 +108,13 @@ jobs:
         with:
           file: ./docker/Dockerfile
           target: fullstack
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64  # 保留双架构
           push: true
           cache-from: type=gha,scope=fullstack
-          cache-to: type=gha,mode=max,scope=fullstack
+          cache-to: type=gha,mode=max,scope=fullstack,compression=zstd
+          squash: true
           build-args: |
+            BUILDKIT_INLINE_CACHE=1
             VITE_DEFAULT_SERVER=/api
             VITE_FULLSTACK=true
           tags: ${{ secrets.DOCKER_USERNAME }}/bililive-tools:test
